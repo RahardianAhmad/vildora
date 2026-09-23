@@ -1,0 +1,206 @@
+import { Routes, Route, Navigate } from "react-router-dom";
+
+/* =====================================================
+   COMPONENTS
+===================================================== */
+
+import Navbar from "./components/Navbar";
+
+/* =====================================================
+   PAGES
+===================================================== */
+
+import Home from "./pages/Home";
+import Videos from "./pages/Videos";
+import Login from "./pages/Login";
+import Register from "./pages/Register";
+import Dashboard from "./pages/Dashboard";
+import Upload from "./pages/Upload";
+import MyVideos from "./pages/MyVideos";
+import AdminDashboard from "./pages/AdminDashboard";
+import AdminApprove from "./pages/AdminApprove";
+import Watch from "./pages/Watch";
+
+/* =====================================================
+   PROTECTED ROUTE
+   HANYA UNTUK USER YANG SUDAH LOGIN
+===================================================== */
+
+function ProtectedRoute({ children }) {
+  const token = localStorage.getItem("token");
+
+  // Belum login
+  if (!token) {
+    return <Navigate to="/login" replace />;
+  }
+
+  // Sudah login
+  return children;
+}
+
+/* =====================================================
+   ADMIN ROUTE
+   KHUSUS ADMIN
+===================================================== */
+
+function AdminRoute({ children }) {
+  const token = localStorage.getItem("token");
+
+  let user = null;
+
+  try {
+    user = JSON.parse(localStorage.getItem("user") || "null");
+  } catch (error) {
+    console.error("User data error:", error);
+
+    localStorage.removeItem("user");
+  }
+
+  // Belum login
+  if (!token) {
+    return <Navigate to="/login" replace />;
+  }
+
+  // Bukan admin
+  if (!user || user.role !== "admin") {
+    return <Navigate to="/dashboard" replace />;
+  }
+
+  // Admin
+  return children;
+}
+
+/* =====================================================
+   APP
+===================================================== */
+
+function App() {
+  return (
+    <>
+      {/* =================================================
+          GLOBAL NAVBAR
+      ================================================= */}
+
+      <Navbar />
+
+      <Routes>
+        {/* =================================================
+            HOME
+            PUBLIC
+            Tidak perlu login
+        ================================================= */}
+
+        <Route path="/" element={<Home />} />
+
+        {/* =================================================
+            SEMUA VIDEO
+            PUBLIC
+            Tidak perlu login
+        ================================================= */}
+
+        <Route path="/videos" element={<Videos />} />
+
+        {/* =================================================
+            LOGIN
+            PUBLIC
+        ================================================= */}
+
+        <Route path="/login" element={<Login />} />
+
+        {/* =================================================
+            REGISTER
+            PUBLIC
+        ================================================= */}
+
+        <Route path="/register" element={<Register />} />
+
+        {/* =================================================
+            WATCH VIDEO
+            PUBLIC
+        ================================================= */}
+
+        <Route path="/watch/:id" element={<Watch />} />
+
+        {/* =================================================
+            USER DASHBOARD
+            LOGIN REQUIRED
+        ================================================= */}
+
+        <Route
+          path="/dashboard"
+          element={
+            <ProtectedRoute>
+              <Dashboard />
+            </ProtectedRoute>
+          }
+        />
+
+        {/* =================================================
+            UPLOAD VIDEO
+            LOGIN REQUIRED
+        ================================================= */}
+
+        <Route
+          path="/upload"
+          element={
+            <ProtectedRoute>
+              <Upload />
+            </ProtectedRoute>
+          }
+        />
+
+        {/* =================================================
+            MY VIDEOS
+            LOGIN REQUIRED
+        ================================================= */}
+
+        <Route
+          path="/my-videos"
+          element={
+            <ProtectedRoute>
+              <MyVideos />
+            </ProtectedRoute>
+          }
+        />
+
+        {/* =================================================
+            ADMIN DASHBOARD
+            ADMIN ONLY
+        ================================================= */}
+
+        <Route
+          path="/admin"
+          element={
+            <AdminRoute>
+              <AdminDashboard />
+            </AdminRoute>
+          }
+        />
+
+        {/* =================================================
+            ADMIN APPROVE
+            ADMIN ONLY
+        ================================================= */}
+
+        <Route
+          path="/admin/approve"
+          element={
+            <AdminRoute>
+              <AdminApprove />
+            </AdminRoute>
+          }
+        />
+
+        {/* =================================================
+            404
+            Semua URL yang tidak dikenal
+            kembali ke Home
+        ================================================= */}
+
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    </>
+  );
+}
+
+export default App;
