@@ -119,12 +119,11 @@ app.use((err, req, res, next) => {
 
 const PORT = process.env.PORT || 3000;
 
-app.listen(PORT, () => {
+app.listen(PORT, "0.0.0.0", () => {
   console.log("================================");
   console.log("       VIDORA BACKEND");
   console.log("================================");
-  console.log(`Server : http://localhost:${PORT}`);
-  console.log(`Frontend : http://localhost:5173`);
-  console.log(`Payment : http://localhost:${PORT}/api/payments`);
+  console.log(`Server berjalan di port ${PORT}`);
+  console.log(`Payment : /api/payments`);
   console.log("================================");
 });
