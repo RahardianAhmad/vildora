@@ -1,6 +1,5 @@
 const db = require("../config/database");
-const fs = require("fs");
-const path = require("path");
+const cloudinary = require("../config/cloudinary");
 
 // ======================================================
 // UPLOAD VIDEO
@@ -12,12 +11,20 @@ exports.uploadVideo = async (req, res) => {
   try {
     const { title, description, price } = req.body;
 
+    // ==================================================
+    // VALIDASI JUDUL
+    // ==================================================
+
     if (!title || !title.trim()) {
       return res.status(400).json({
         success: false,
         message: "Judul video wajib diisi.",
       });
     }
+
+    // ==================================================
+    // VALIDASI FILE VIDEO
+    // ==================================================
 
     if (!req.files || !req.files.video || req.files.video.length === 0) {
       return res.status(400).json({
@@ -26,13 +33,32 @@ exports.uploadVideo = async (req, res) => {
       });
     }
 
-    const videoFile = req.files.video[0].filename;
+    // ==================================================
+    // DATA VIDEO DARI CLOUDINARY
+    // ==================================================
+
+    const videoUpload = req.files.video[0];
+
+    const videoFile = videoUpload.path;
+    const videoPublicId = videoUpload.filename;
+
+    // ==================================================
+    // DATA THUMBNAIL DARI CLOUDINARY
+    // ==================================================
 
     let thumbnailFile = null;
+    let thumbnailPublicId = null;
 
     if (req.files.thumbnail && req.files.thumbnail.length > 0) {
-      thumbnailFile = req.files.thumbnail[0].filename;
+      const thumbnailUpload = req.files.thumbnail[0];
+
+      thumbnailFile = thumbnailUpload.path;
+      thumbnailPublicId = thumbnailUpload.filename;
     }
+
+    // ==================================================
+    // VALIDASI HARGA
+    // ==================================================
 
     let videoPrice = 0;
 
@@ -49,9 +75,18 @@ exports.uploadVideo = async (req, res) => {
       videoPrice = parsedPrice;
     }
 
+    // ==================================================
+    // STATUS VIDEO
+    //
     // ADMIN -> langsung approved
     // USER  -> pending
+    // ==================================================
+
     const status = req.user.role === "admin" ? "approved" : "pending";
+
+    // ==================================================
+    // SIMPAN KE DATABASE
+    // ==================================================
 
     const [result] = await db.promise().query(
       `
@@ -62,10 +97,12 @@ exports.uploadVideo = async (req, res) => {
         description,
         video_file,
         thumbnail,
+        video_public_id,
+        thumbnail_public_id,
         price,
         status
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
       `,
       [
         req.user.id,
@@ -73,10 +110,16 @@ exports.uploadVideo = async (req, res) => {
         description || "",
         videoFile,
         thumbnailFile,
+        videoPublicId,
+        thumbnailPublicId,
         videoPrice,
         status,
       ],
     );
+
+    // ==================================================
+    // RESPONSE
+    // ==================================================
 
     return res.status(201).json({
       success: true,
@@ -92,6 +135,8 @@ exports.uploadVideo = async (req, res) => {
         description: description || "",
         video_file: videoFile,
         thumbnail: thumbnailFile,
+        video_public_id: videoPublicId,
+        thumbnail_public_id: thumbnailPublicId,
         price: videoPrice,
         status,
       },
@@ -123,10 +168,13 @@ exports.getApprovedVideos = async (req, res) => {
         v.description,
         v.video_file,
         v.thumbnail,
+        v.video_public_id,
+        v.thumbnail_public_id,
         v.price,
         v.status,
         v.views,
         v.created_at,
+        v.updated_at,
         u.username
       FROM videos v
       INNER JOIN users u
@@ -184,6 +232,8 @@ exports.getVideoById = async (req, res) => {
         v.description,
         v.video_file,
         v.thumbnail,
+        v.video_public_id,
+        v.thumbnail_public_id,
         v.price,
         v.status,
         v.rejection_reason,
@@ -217,6 +267,10 @@ exports.getVideoById = async (req, res) => {
 
     const isOwner = Number(video.user_id) === Number(userId);
 
+    // ==================================================
+    // TAMBAH VIEW
+    // ==================================================
+
     await db.promise().query(
       `
       UPDATE videos
@@ -227,6 +281,10 @@ exports.getVideoById = async (req, res) => {
     );
 
     video.views = Number(video.views || 0) + 1;
+
+    // ==================================================
+    // RESPONSE
+    // ==================================================
 
     return res.json({
       success: true,
@@ -267,6 +325,8 @@ exports.getMyVideos = async (req, res) => {
         description,
         video_file,
         thumbnail,
+        video_public_id,
+        thumbnail_public_id,
         price,
         status,
         rejection_reason,
@@ -309,10 +369,13 @@ exports.getPendingVideos = async (req, res) => {
         v.description,
         v.video_file,
         v.thumbnail,
+        v.video_public_id,
+        v.thumbnail_public_id,
         v.price,
         v.status,
         v.rejection_reason,
         v.created_at,
+        v.updated_at,
         u.username,
         u.email
       FROM videos v
@@ -345,6 +408,10 @@ exports.approveVideo = async (req, res) => {
   try {
     const videoId = req.params.id;
 
+    // ==================================================
+    // CEK VIDEO
+    // ==================================================
+
     const [videos] = await db.promise().query(
       `
       SELECT
@@ -363,6 +430,10 @@ exports.approveVideo = async (req, res) => {
       });
     }
 
+    // ==================================================
+    // UPDATE STATUS
+    // ==================================================
+
     await db.promise().query(
       `
       UPDATE videos
@@ -373,6 +444,10 @@ exports.approveVideo = async (req, res) => {
       `,
       [videoId],
     );
+
+    // ==================================================
+    // SIMPAN LOG APPROVAL
+    // ==================================================
 
     await db.promise().query(
       `
@@ -412,12 +487,20 @@ exports.rejectVideo = async (req, res) => {
 
     const { reason } = req.body;
 
+    // ==================================================
+    // VALIDASI ALASAN
+    // ==================================================
+
     if (!reason || !reason.trim()) {
       return res.status(400).json({
         success: false,
         message: "Alasan penolakan wajib diisi.",
       });
     }
+
+    // ==================================================
+    // CEK VIDEO
+    // ==================================================
 
     const [videos] = await db.promise().query(
       `
@@ -435,6 +518,10 @@ exports.rejectVideo = async (req, res) => {
       });
     }
 
+    // ==================================================
+    // UPDATE STATUS
+    // ==================================================
+
     await db.promise().query(
       `
       UPDATE videos
@@ -445,6 +532,10 @@ exports.rejectVideo = async (req, res) => {
       `,
       [reason.trim(), videoId],
     );
+
+    // ==================================================
+    // SIMPAN LOG REJECT
+    // ==================================================
 
     await db.promise().query(
       `
@@ -480,44 +571,68 @@ exports.rejectVideo = async (req, res) => {
 
 exports.getAdminStats = async (req, res) => {
   try {
+    // ==================================================
+    // TOTAL VIDEO
+    // ==================================================
+
     const [[total]] = await db.promise().query(
       `
-      SELECT COUNT(*) AS total
-      FROM videos
-      `,
+        SELECT COUNT(*) AS total
+        FROM videos
+        `,
     );
+
+    // ==================================================
+    // PENDING
+    // ==================================================
 
     const [[pending]] = await db.promise().query(
       `
-      SELECT COUNT(*) AS total
-      FROM videos
-      WHERE status = 'pending'
-      `,
+        SELECT COUNT(*) AS total
+        FROM videos
+        WHERE status = 'pending'
+        `,
     );
+
+    // ==================================================
+    // APPROVED
+    // ==================================================
 
     const [[approved]] = await db.promise().query(
       `
-      SELECT COUNT(*) AS total
-      FROM videos
-      WHERE status = 'approved'
-      `,
+        SELECT COUNT(*) AS total
+        FROM videos
+        WHERE status = 'approved'
+        `,
     );
+
+    // ==================================================
+    // REJECTED
+    // ==================================================
 
     const [[rejected]] = await db.promise().query(
       `
-      SELECT COUNT(*) AS total
-      FROM videos
-      WHERE status = 'rejected'
-      `,
+        SELECT COUNT(*) AS total
+        FROM videos
+        WHERE status = 'rejected'
+        `,
     );
+
+    // ==================================================
+    // TOTAL USER
+    // ==================================================
 
     const [[users]] = await db.promise().query(
       `
-      SELECT COUNT(*) AS total
-      FROM users
-      WHERE role = 'user'
-      `,
+        SELECT COUNT(*) AS total
+        FROM users
+        WHERE role = 'user'
+        `,
     );
+
+    // ==================================================
+    // RESPONSE
+    // ==================================================
 
     return res.json({
       success: true,
@@ -564,6 +679,8 @@ exports.getDashboardVideos = async (req, res) => {
         v.description,
         v.video_file,
         v.thumbnail,
+        v.video_public_id,
+        v.thumbnail_public_id,
         v.price,
         v.status,
         v.rejection_reason,
@@ -583,6 +700,10 @@ exports.getDashboardVideos = async (req, res) => {
       [userId],
     );
 
+    // ==================================================
+    // FORMAT VIDEO
+    // ==================================================
+
     const formattedVideos = videos.map((video) => ({
       ...video,
 
@@ -593,11 +714,23 @@ exports.getDashboardVideos = async (req, res) => {
       isPaid: Number(video.price || 0) > 0,
     }));
 
+    // ==================================================
+    // VIDEO MILIK USER
+    // ==================================================
+
     const myVideos = formattedVideos.filter((video) => video.isOwner);
+
+    // ==================================================
+    // VIDEO APPROVED
+    // ==================================================
 
     const approvedVideos = formattedVideos.filter(
       (video) => video.status === "approved",
     );
+
+    // ==================================================
+    // RESPONSE
+    // ==================================================
 
     return res.json({
       success: true,
@@ -632,7 +765,7 @@ exports.getDashboardVideos = async (req, res) => {
 // DATABASE:
 // record video dihapus
 //
-// FILE:
+// CLOUDINARY:
 // video + thumbnail ikut dihapus
 // ======================================================
 
@@ -662,7 +795,9 @@ exports.deleteVideo = async (req, res) => {
         user_id,
         title,
         video_file,
-        thumbnail
+        thumbnail,
+        video_public_id,
+        thumbnail_public_id
       FROM videos
       WHERE id = ?
       LIMIT 1
@@ -692,8 +827,8 @@ exports.deleteVideo = async (req, res) => {
     const isOwner = currentUserId === videoOwnerId;
 
     // ==================================================
-    // USER BIASA HANYA BOLEH HAPUS VIDEO SENDIRI
-    // ADMIN BOLEH HAPUS SEMUA VIDEO
+    // USER BIASA HANYA BOLEH
+    // HAPUS VIDEO SENDIRI
     // ==================================================
 
     if (!isAdmin && !isOwner) {
@@ -701,6 +836,46 @@ exports.deleteVideo = async (req, res) => {
         success: false,
         message: "Kamu tidak memiliki izin untuk menghapus video ini.",
       });
+    }
+
+    // ==================================================
+    // HAPUS VIDEO DARI CLOUDINARY
+    // ==================================================
+
+    if (video.video_public_id) {
+      try {
+        const result = await cloudinary.uploader.destroy(
+          video.video_public_id,
+          {
+            resource_type: "video",
+            invalidate: true,
+          },
+        );
+
+        console.log("Cloudinary video delete:", result);
+      } catch (cloudError) {
+        console.error("Gagal menghapus video dari Cloudinary:", cloudError);
+      }
+    }
+
+    // ==================================================
+    // HAPUS THUMBNAIL DARI CLOUDINARY
+    // ==================================================
+
+    if (video.thumbnail_public_id) {
+      try {
+        const result = await cloudinary.uploader.destroy(
+          video.thumbnail_public_id,
+          {
+            resource_type: "image",
+            invalidate: true,
+          },
+        );
+
+        console.log("Cloudinary thumbnail delete:", result);
+      } catch (cloudError) {
+        console.error("Gagal menghapus thumbnail dari Cloudinary:", cloudError);
+      }
     }
 
     // ==================================================
@@ -714,54 +889,6 @@ exports.deleteVideo = async (req, res) => {
       `,
       [videoId],
     );
-
-    // ==================================================
-    // HAPUS FILE VIDEO
-    // ==================================================
-
-    if (video.video_file) {
-      const videoPath = path.join(
-        __dirname,
-        "../uploads/videos",
-        video.video_file,
-      );
-
-      if (fs.existsSync(videoPath)) {
-        try {
-          fs.unlinkSync(videoPath);
-
-          console.log("Video file dihapus:", videoPath);
-        } catch (fileError) {
-          console.error("Gagal menghapus video file:", fileError);
-        }
-      } else {
-        console.log("File video tidak ditemukan:", videoPath);
-      }
-    }
-
-    // ==================================================
-    // HAPUS THUMBNAIL
-    // ==================================================
-
-    if (video.thumbnail) {
-      const thumbnailPath = path.join(
-        __dirname,
-        "../uploads/thumbnails",
-        video.thumbnail,
-      );
-
-      if (fs.existsSync(thumbnailPath)) {
-        try {
-          fs.unlinkSync(thumbnailPath);
-
-          console.log("Thumbnail dihapus:", thumbnailPath);
-        } catch (fileError) {
-          console.error("Gagal menghapus thumbnail:", fileError);
-        }
-      } else {
-        console.log("Thumbnail tidak ditemukan:", thumbnailPath);
-      }
-    }
 
     // ==================================================
     // RESPONSE

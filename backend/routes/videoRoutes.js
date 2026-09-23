@@ -7,9 +7,7 @@ const router = express.Router();
 // ======================================================
 
 const authMiddleware = require("../middleware/authMiddleware");
-
 const adminMiddleware = require("../middleware/adminMiddleware");
-
 const upload = require("../middleware/uploadMiddleware");
 
 // ======================================================
@@ -61,27 +59,33 @@ router.get("/approved", getApprovedVideos);
 //
 // Wajib login.
 //
-// USER  -> pending
-// ADMIN -> approved
+// USER:
+// - video masuk pending
+//
+// ADMIN:
+// - video langsung approved
+//
+// FORM DATA:
+// video     -> file video
+// thumbnail -> gambar thumbnail
+// title     -> judul
+// description -> deskripsi
+// price     -> harga
 // ======================================================
 
 router.post(
   "/upload",
-
   authMiddleware,
-
   upload.fields([
     {
       name: "video",
       maxCount: 1,
     },
-
     {
       name: "thumbnail",
       maxCount: 1,
     },
   ]),
-
   uploadVideo,
 );
 
@@ -116,6 +120,7 @@ router.get("/dashboard", authMiddleware, getDashboardVideos);
 // Wajib login.
 //
 // Menampilkan semua video milik user:
+//
 // - pending
 // - approved
 // - rejected
@@ -139,6 +144,8 @@ router.get("/admin/stats", authMiddleware, adminMiddleware, getAdminStats);
 // GET /api/videos/admin/pending
 //
 // Hanya ADMIN.
+//
+// Menampilkan video yang menunggu approval.
 // ======================================================
 
 router.get("/admin/pending", authMiddleware, adminMiddleware, getPendingVideos);
@@ -149,6 +156,9 @@ router.get("/admin/pending", authMiddleware, adminMiddleware, getPendingVideos);
 // PUT /api/videos/admin/:id/approve
 //
 // Hanya ADMIN.
+//
+// Contoh:
+// PUT /api/videos/admin/10/approve
 // ======================================================
 
 router.put("/admin/:id/approve", authMiddleware, adminMiddleware, approveVideo);
@@ -159,6 +169,12 @@ router.put("/admin/:id/approve", authMiddleware, adminMiddleware, approveVideo);
 // PUT /api/videos/admin/:id/reject
 //
 // Hanya ADMIN.
+//
+// Body:
+//
+// {
+//   "reason": "Konten tidak sesuai"
+// }
 // ======================================================
 
 router.put("/admin/:id/reject", authMiddleware, adminMiddleware, rejectVideo);
@@ -174,9 +190,15 @@ router.put("/admin/:id/reject", authMiddleware, adminMiddleware, rejectVideo);
 // ADMIN:
 // bisa menghapus video siapa saja.
 //
-// PENTING:
-// Route DELETE ini diletakkan sebelum
-// GET /:id supaya struktur route jelas.
+// Proses delete:
+// 1. Cek video
+// 2. Cek owner/admin
+// 3. Hapus video dari Cloudinary
+// 4. Hapus thumbnail dari Cloudinary
+// 5. Hapus record dari database
+//
+// Route DELETE diletakkan sebelum GET /:id
+// supaya struktur route tetap jelas.
 // ======================================================
 
 router.delete("/:id", authMiddleware, deleteVideo);
@@ -198,14 +220,13 @@ router.delete("/:id", authMiddleware, deleteVideo);
 // - pending   -> tidak boleh
 // - rejected  -> tidak boleh
 //
-// PENTING:
 // Route GET /:id harus PALING BAWAH.
 // ======================================================
 
 router.get("/:id", authMiddleware, getVideoById);
 
 // ======================================================
-// EXPORT
+// EXPORT ROUTER
 // ======================================================
 
 module.exports = router;
