@@ -51,7 +51,7 @@ function AdminDashboard() {
 
             <h1>Dashboard Admin</h1>
 
-            <p>Kelola video, approval, dan pengguna VIDORA.</p>
+            <p>Kelola video, approval, dan pengguna Colingers.</p>
           </div>
         </div>
 

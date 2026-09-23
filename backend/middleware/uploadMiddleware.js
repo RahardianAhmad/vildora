@@ -68,7 +68,7 @@ const upload = multer({
   fileFilter,
 
   limits: {
-    fileSize: 100 * 1024 * 1024,
+    fileSize: 1024 * 1024 * 1024, // MAKSIMAL 1 GB
   },
 });
 

@@ -1,19 +1,27 @@
 import { useEffect, useRef, useState } from "react";
-
 import { Link, useParams, useNavigate } from "react-router-dom";
 
 const API_URL = "http://localhost:3000";
 
 function Watch() {
   const { id } = useParams();
-
   const navigate = useNavigate();
+
+  // =====================================================
+  // VIDEO REF
+  // =====================================================
 
   const videoRef = useRef(null);
 
-  // ======================================================
+  // Lock preview setelah 5 detik
+  const previewLockedRef = useRef(false);
+
+  // Mencegah event seeking berulang
+  const forcePositionRef = useRef(false);
+
+  // =====================================================
   // STATE VIDEO
-  // ======================================================
+  // =====================================================
 
   const [video, setVideo] = useState(null);
 
@@ -21,9 +29,9 @@ function Watch() {
 
   const [error, setError] = useState("");
 
-  // ======================================================
+  // =====================================================
   // STATE PURCHASE
-  // ======================================================
+  // =====================================================
 
   const [purchased, setPurchased] = useState(false);
 
@@ -31,33 +39,20 @@ function Watch() {
 
   const [paymentLoading, setPaymentLoading] = useState(false);
 
+  // Preview sudah selesai
   const [previewEnded, setPreviewEnded] = useState(false);
 
-  // ======================================================
+  // =====================================================
   // TOKEN
-  // ======================================================
+  // =====================================================
 
   const getToken = () => {
     return localStorage.getItem("token");
   };
 
-  // ======================================================
-  // USER
-  // ======================================================
-
-  const getUser = () => {
-    try {
-      return JSON.parse(localStorage.getItem("user") || "null");
-    } catch (error) {
-      console.error("Gagal membaca user:", error);
-
-      return null;
-    }
-  };
-
-  // ======================================================
+  // =====================================================
   // LOAD VIDEO
-  // ======================================================
+  // =====================================================
 
   useEffect(() => {
     const loadVideo = async () => {
@@ -68,28 +63,15 @@ function Watch() {
         const token = getToken();
 
         console.log("=================================");
-
-        console.log("MENGAMBIL VIDEO");
-
-        console.log("Video ID:", id);
-
-        console.log("Login:", token ? "YA" : "TIDAK");
-
+        console.log("LOAD VIDEO");
+        console.log("VIDEO ID:", id);
         console.log("=================================");
-
-        // ==================================================
-        // HEADER
-        // ==================================================
 
         const headers = {};
 
         if (token) {
           headers.Authorization = `Bearer ${token}`;
         }
-
-        // ==================================================
-        // REQUEST
-        // ==================================================
 
         const response = await fetch(`${API_URL}/api/videos/${id}`, {
           method: "GET",
@@ -100,9 +82,9 @@ function Watch() {
 
         console.log("VIDEO RESPONSE:", data);
 
-        // ==================================================
+        // =================================================
         // BELUM LOGIN
-        // ==================================================
+        // =================================================
 
         if (response.status === 401) {
           setError("Kamu harus login terlebih dahulu untuk menonton video.");
@@ -110,9 +92,9 @@ function Watch() {
           return;
         }
 
-        // ==================================================
-        // TIDAK BOLEH AKSES
-        // ==================================================
+        // =================================================
+        // VIDEO TIDAK DITEMUKAN
+        // =================================================
 
         if (response.status === 404) {
           setError(
@@ -122,23 +104,31 @@ function Watch() {
           return;
         }
 
-        // ==================================================
+        // =================================================
         // ERROR LAIN
-        // ==================================================
+        // =================================================
 
         if (!response.ok) {
           throw new Error(data.message || "Gagal mengambil video.");
         }
 
-        // ==================================================
+        // =================================================
         // SET VIDEO
-        // ==================================================
+        // =================================================
 
         setVideo(data.video);
-      } catch (error) {
-        console.error("GET VIDEO ERROR:", error);
 
-        setError(error.message || "Gagal mengambil video.");
+        // Reset preview
+        previewLockedRef.current = false;
+        forcePositionRef.current = false;
+
+        setPreviewEnded(false);
+
+        setPurchased(false);
+      } catch (err) {
+        console.error("GET VIDEO ERROR:", err);
+
+        setError(err.message || "Gagal mengambil video.");
       } finally {
         setLoading(false);
       }
@@ -149,28 +139,21 @@ function Watch() {
     }
   }, [id]);
 
-  // ======================================================
-  // CEK PURCHASE SAAT HALAMAN DIBUKA
-  // ======================================================
+  // =====================================================
+  // CHECK PURCHASE SAAT HALAMAN DIBUKA
+  // =====================================================
 
   useEffect(() => {
     if (!id) {
       return;
     }
 
-    const token = getToken();
-
-    if (!token) {
-      setPurchased(false);
-      return;
-    }
-
     checkPurchase();
   }, [id]);
 
-  // ======================================================
+  // =====================================================
   // CHECK PURCHASE
-  // ======================================================
+  // =====================================================
 
   const checkPurchase = async () => {
     const token = getToken();
@@ -202,7 +185,17 @@ function Watch() {
         return false;
       }
 
+      // =================================================
+      // SUDAH DIBELI
+      // =================================================
+
       if (data.purchased === true) {
+        console.log("VIDEO SUDAH DIBELI");
+
+        previewLockedRef.current = false;
+
+        forcePositionRef.current = false;
+
         setPurchased(true);
 
         setPreviewEnded(false);
@@ -210,11 +203,15 @@ function Watch() {
         return true;
       }
 
+      // =================================================
+      // BELUM DIBELI
+      // =================================================
+
       setPurchased(false);
 
       return false;
-    } catch (error) {
-      console.error("CHECK PURCHASE ERROR:", error);
+    } catch (err) {
+      console.error("CHECK PURCHASE ERROR:", err);
 
       return false;
     } finally {
@@ -222,9 +219,9 @@ function Watch() {
     }
   };
 
-  // ======================================================
-  // BATASI VIDEO BERBAYAR 5 DETIK
-  // ======================================================
+  // =====================================================
+  // HANDLE TIME UPDATE
+  // =====================================================
 
   const handleTimeUpdate = (event) => {
     const player = event.currentTarget;
@@ -233,68 +230,271 @@ function Watch() {
       return;
     }
 
-    // ==================================================
-    // CEK OWNER DARI BACKEND
-    // ==================================================
+    // =================================================
+    // OWNER
+    // =================================================
 
+    // Pemilik video boleh menonton full
     if (video.isOwner) {
       return;
     }
 
-    // ==================================================
+    // =================================================
     // HARGA
-    // ==================================================
+    // =================================================
 
     const price = Number(video.price || 0);
 
-    // ==================================================
-    // GRATIS
-    // ==================================================
+    // =================================================
+    // VIDEO GRATIS
+    // =================================================
 
     if (price <= 0) {
       return;
     }
 
-    // ==================================================
-    // SUDAH BELI
-    // ==================================================
+    // =================================================
+    // SUDAH DIBELI
+    // =================================================
 
     if (purchased) {
       return;
     }
 
-    // ==================================================
-    // PREVIEW SUDAH BERAKHIR
-    // ==================================================
+    // =================================================
+    // PREVIEW 5 DETIK
+    // =================================================
 
-    if (previewEnded) {
-      return;
-    }
+    if (!previewLockedRef.current && player.currentTime >= 5) {
+      console.log("=================================");
 
-    // ==================================================
-    // BATAS 5 DETIK
-    // ==================================================
+      console.log("PREVIEW 5 DETIK SELESAI");
 
-    if (player.currentTime >= 5) {
-      console.log("Preview 5 detik selesai.");
+      console.log("VIDEO DIKUNCI");
 
+      console.log("=================================");
+
+      // Aktifkan lock
+      previewLockedRef.current = true;
+
+      // Pause
       player.pause();
+
+      // Kembali tepat ke 5 detik
+      forcePositionRef.current = true;
 
       player.currentTime = 5;
 
+      setTimeout(() => {
+        forcePositionRef.current = false;
+      }, 100);
+
+      // Tampilkan overlay
       setPreviewEnded(true);
+    }
+
+    // =================================================
+    // JIKA SUDAH LOCK
+    // =================================================
+
+    if (previewLockedRef.current) {
+      if (player.currentTime !== 5) {
+        forcePositionRef.current = true;
+
+        player.pause();
+
+        player.currentTime = 5;
+
+        setTimeout(() => {
+          forcePositionRef.current = false;
+        }, 100);
+      }
     }
   };
 
-  // ======================================================
+  // =====================================================
+  // HANDLE SEEKING
+  // =====================================================
+
+  const handleSeeking = (event) => {
+    const player = event.currentTarget;
+
+    if (!video) {
+      return;
+    }
+
+    // =================================================
+    // OWNER
+    // =================================================
+
+    if (video.isOwner) {
+      return;
+    }
+
+    // =================================================
+    // HARGA
+    // =================================================
+
+    const price = Number(video.price || 0);
+
+    // =================================================
+    // GRATIS
+    // =================================================
+
+    if (price <= 0) {
+      return;
+    }
+
+    // =================================================
+    // SUDAH BELI
+    // =================================================
+
+    if (purchased) {
+      return;
+    }
+
+    // =================================================
+    // SUDAH LOCK
+    // =================================================
+
+    if (previewLockedRef.current) {
+      console.log("SEEK DITOLAK - VIDEO TERKUNCI");
+
+      forcePositionRef.current = true;
+
+      player.pause();
+
+      if (player.currentTime !== 5) {
+        player.currentTime = 5;
+      }
+
+      setTimeout(() => {
+        forcePositionRef.current = false;
+      }, 100);
+
+      return;
+    }
+
+    // =================================================
+    // BELUM LOCK
+    // =================================================
+
+    if (player.currentTime > 5) {
+      console.log("USER MENCOBA MELEWATI 5 DETIK");
+
+      forcePositionRef.current = true;
+
+      player.currentTime = 5;
+
+      setTimeout(() => {
+        forcePositionRef.current = false;
+      }, 100);
+    }
+  };
+
+  // =====================================================
+  // HANDLE PLAY
+  // =====================================================
+
+  const handlePlay = (event) => {
+    const player = event.currentTarget;
+
+    if (!video) {
+      return;
+    }
+
+    // =================================================
+    // OWNER
+    // =================================================
+
+    if (video.isOwner) {
+      return;
+    }
+
+    // =================================================
+    // HARGA
+    // =================================================
+
+    const price = Number(video.price || 0);
+
+    // =================================================
+    // GRATIS
+    // =================================================
+
+    if (price <= 0) {
+      return;
+    }
+
+    // =================================================
+    // SUDAH BELI
+    // =================================================
+
+    if (purchased) {
+      return;
+    }
+
+    // =================================================
+    // TERKUNCI
+    // =================================================
+
+    if (previewLockedRef.current) {
+      console.log("PLAY DITOLAK - VIDEO TERKUNCI");
+
+      player.pause();
+
+      forcePositionRef.current = true;
+
+      player.currentTime = 5;
+
+      setTimeout(() => {
+        forcePositionRef.current = false;
+      }, 100);
+    }
+  };
+
+  // =====================================================
+  // HANDLE LOADED METADATA
+  // =====================================================
+
+  const handleLoadedMetadata = () => {
+    const player = videoRef.current;
+
+    if (!player || !video) {
+      return;
+    }
+
+    // Owner full
+    if (video.isOwner) {
+      return;
+    }
+
+    const price = Number(video.price || 0);
+
+    // Gratis full
+    if (price <= 0) {
+      return;
+    }
+
+    // Sudah beli
+    if (purchased) {
+      return;
+    }
+
+    // Preview mulai dari 0
+    if (!previewLockedRef.current) {
+      player.currentTime = 0;
+    }
+  };
+
+  // =====================================================
   // BUAT PEMBAYARAN
-  // ======================================================
+  // =====================================================
 
   const handleBuyVideo = async () => {
     try {
-      // ==================================================
-      // CEK LOGIN
-      // ==================================================
+      // =================================================
+      // LOGIN
+      // =================================================
 
       const token = getToken();
 
@@ -306,9 +506,9 @@ function Watch() {
         return;
       }
 
-      // ==================================================
-      // CEK VIDEO
-      // ==================================================
+      // =================================================
+      // VIDEO
+      // =================================================
 
       if (!video) {
         alert("Data video belum tersedia.");
@@ -316,9 +516,9 @@ function Watch() {
         return;
       }
 
-      // ==================================================
-      // OWNER TIDAK PERLU BELI
-      // ==================================================
+      // =================================================
+      // OWNER
+      // =================================================
 
       if (video.isOwner) {
         alert("Kamu adalah pemilik video ini.");
@@ -326,9 +526,9 @@ function Watch() {
         return;
       }
 
-      // ==================================================
-      // CEK HARGA
-      // ==================================================
+      // =================================================
+      // HARGA
+      // =================================================
 
       const price = Number(video.price || 0);
 
@@ -338,9 +538,9 @@ function Watch() {
         return;
       }
 
-      // ==================================================
+      // =================================================
       // CEK PURCHASE
-      // ==================================================
+      // =================================================
 
       const alreadyPurchased = await checkPurchase();
 
@@ -350,15 +550,27 @@ function Watch() {
         return;
       }
 
-      // ==================================================
-      // LOADING
-      // ==================================================
+      // =================================================
+      // PAYMENT LOADING
+      // =================================================
 
       setPaymentLoading(true);
 
-      // ==================================================
+      console.log("=================================");
+
+      console.log("MEMBUAT PEMBAYARAN");
+
+      console.log("VIDEO ID:", video.id);
+
+      console.log("JUDUL:", video.title);
+
+      console.log("HARGA:", price);
+
+      console.log("=================================");
+
+      // =================================================
       // CREATE PAYMENT
-      // ==================================================
+      // =================================================
 
       const response = await fetch(`${API_URL}/api/payments/create`, {
         method: "POST",
@@ -376,14 +588,18 @@ function Watch() {
 
       const data = await response.json();
 
-      console.log("RESPONSE PAYMENT:", data);
+      console.log("PAYMENT RESPONSE:", data);
 
-      // ==================================================
+      // =================================================
       // ERROR
-      // ==================================================
+      // =================================================
 
       if (!response.ok) {
         if (data.alreadyPaid) {
+          previewLockedRef.current = false;
+
+          forcePositionRef.current = false;
+
           setPurchased(true);
 
           setPreviewEnded(false);
@@ -396,30 +612,30 @@ function Watch() {
         throw new Error(data.message || "Gagal membuat pembayaran.");
       }
 
-      // ==================================================
+      // =================================================
       // SNAP TOKEN
-      // ==================================================
+      // =================================================
 
       if (!data.snapToken) {
         throw new Error("Snap Token tidak diterima dari server.");
       }
 
-      // ==================================================
-      // CEK SNAP
-      // ==================================================
+      // =================================================
+      // MIDTRANS SNAP
+      // =================================================
 
       if (!window.snap || typeof window.snap.pay !== "function") {
         throw new Error("Midtrans Snap belum dimuat. Periksa index.html.");
       }
 
-      // ==================================================
-      // MIDTRANS
-      // ==================================================
+      // =================================================
+      // OPEN MIDTRANS
+      // =================================================
 
       window.snap.pay(data.snapToken, {
-        // ==========================================
+        // =============================================
         // SUCCESS
-        // ==========================================
+        // =============================================
 
         onSuccess: async function (result) {
           console.log("MIDTRANS SUCCESS:", result);
@@ -431,9 +647,9 @@ function Watch() {
           }, 3000);
         },
 
-        // ==========================================
+        // =============================================
         // PENDING
-        // ==========================================
+        // =============================================
 
         onPending: function (result) {
           console.log("MIDTRANS PENDING:", result);
@@ -441,9 +657,9 @@ function Watch() {
           alert("Pembayaran masih pending. Silakan selesaikan pembayaran.");
         },
 
-        // ==========================================
+        // =============================================
         // ERROR
-        // ==========================================
+        // =============================================
 
         onError: function (result) {
           console.error("MIDTRANS ERROR:", result);
@@ -451,82 +667,115 @@ function Watch() {
           alert("Pembayaran gagal.");
         },
 
-        // ==========================================
+        // =============================================
         // CLOSE
-        // ==========================================
+        // =============================================
 
         onClose: function () {
           console.log("Popup pembayaran ditutup.");
         },
       });
-    } catch (error) {
-      console.error("PAYMENT ERROR:", error);
+    } catch (err) {
+      console.error("PAYMENT ERROR:", err);
 
-      alert(error.message || "Gagal menghubungkan pembayaran.");
+      alert(err.message || "Gagal menghubungkan pembayaran.");
     } finally {
       setPaymentLoading(false);
     }
   };
 
-  // ======================================================
-  // CEK PURCHASE SETELAH PEMBAYARAN
-  // ======================================================
+  // =====================================================
+  // CHECK PURCHASE SETELAH PEMBAYARAN
+  // =====================================================
 
   const checkPurchaseAfterPayment = async () => {
     console.log("Menunggu webhook Midtrans...");
 
-    // ==================================================
-    // CEK PERTAMA
-    // ==================================================
+    // =================================================
+    // CHECK 1
+    // =================================================
 
     let purchasedResult = await checkPurchase();
 
     if (purchasedResult) {
+      unlockVideo();
+
       alert("Video berhasil dibuka penuh!");
 
       return;
     }
 
-    // ==================================================
+    // =================================================
     // TUNGGU 3 DETIK
-    // ==================================================
+    // =================================================
 
     await new Promise((resolve) => setTimeout(resolve, 3000));
 
     purchasedResult = await checkPurchase();
 
     if (purchasedResult) {
+      unlockVideo();
+
       alert("Video berhasil dibuka penuh!");
 
       return;
     }
 
-    // ==================================================
+    // =================================================
     // TUNGGU 5 DETIK
-    // ==================================================
+    // =================================================
 
     await new Promise((resolve) => setTimeout(resolve, 5000));
 
     purchasedResult = await checkPurchase();
 
     if (purchasedResult) {
+      unlockVideo();
+
       alert("Video berhasil dibuka penuh!");
 
       return;
     }
 
-    // ==================================================
-    // WEBHOOK BELUM MASUK
-    // ==================================================
+    // =================================================
+    // BELUM TERUPDATE
+    // =================================================
 
     alert(
-      "Pembayaran sudah diterima oleh Midtrans, tetapi status pembelian belum masuk ke Colingers. Coba refresh beberapa saat lagi.",
+      "Pembayaran sudah diterima oleh Midtrans, tetapi status pembelian belum masuk ke VIDORA. Coba refresh beberapa saat lagi.",
     );
   };
 
-  // ======================================================
+  // =====================================================
+  // UNLOCK VIDEO
+  // =====================================================
+
+  const unlockVideo = () => {
+    console.log("=================================");
+
+    console.log("VIDEO UNLOCK");
+
+    console.log("=================================");
+
+    previewLockedRef.current = false;
+
+    forcePositionRef.current = false;
+
+    setPurchased(true);
+
+    setPreviewEnded(false);
+
+    // Pastikan video bisa dimainkan kembali
+    const player = videoRef.current;
+
+    if (player) {
+      player.controls = true;
+    }
+  };
+
+  // =====================================================
   // LOADING
-  // ======================================================
+  // =====================================================
 
   if (loading) {
     return (
@@ -542,9 +791,9 @@ function Watch() {
     );
   }
 
-  // ======================================================
+  // =====================================================
   // ERROR
-  // ======================================================
+  // =====================================================
 
   if (error || !video) {
     const loginRequired = error.includes("harus login");
@@ -581,19 +830,17 @@ function Watch() {
     );
   }
 
-  // ======================================================
-  // URL VIDEO
-  // ======================================================
+  // =====================================================
+  // CLOUDINARY VIDEO URL
+  // =====================================================
 
-  const videoUrl = `${API_URL}/uploads/videos/${video.video_file}`;
+  const videoUrl = video.video_file;
 
-  const thumbnailUrl = video.thumbnail
-    ? `${API_URL}/uploads/thumbnails/${video.thumbnail}`
-    : undefined;
+  const thumbnailUrl = video.thumbnail || undefined;
 
-  // ======================================================
+  // =====================================================
   // HARGA
-  // ======================================================
+  // =====================================================
 
   const price = Number(video.price || 0);
 
@@ -601,33 +848,28 @@ function Watch() {
 
   const isFreeVideo = price <= 0;
 
-  // ======================================================
+  // =====================================================
   // OWNER
-  //
-  // PENTING:
-  // JANGAN LAGI BERGANTUNG PADA localStorage USER
-  //
-  // Backend yang menentukan pemilik.
-  // ======================================================
+  // =====================================================
 
   const isOwner = Boolean(video.isOwner);
 
-  // ======================================================
+  // =====================================================
   // FULL ACCESS
-  // ======================================================
+  // =====================================================
 
   const hasFullAccess = isFreeVideo || purchased || isOwner;
 
-  // ======================================================
+  // =====================================================
   // RENDER
-  // ======================================================
+  // =====================================================
 
   return (
     <main className="watch-page">
       <div className="watch-container">
-        {/* ==================================================
+        {/* =================================================
             VIDEO PLAYER
-        ================================================== */}
+        ================================================= */}
 
         <div className="watch-player">
           <div className="video-player-wrapper">
@@ -636,16 +878,19 @@ function Watch() {
               controls
               preload="metadata"
               poster={thumbnailUrl}
+              onLoadedMetadata={handleLoadedMetadata}
               onTimeUpdate={handleTimeUpdate}
+              onSeeking={handleSeeking}
+              onPlay={handlePlay}
               playsInline
             >
               <source src={videoUrl} type="video/mp4" />
               Browser kamu tidak mendukung pemutar video.
             </video>
 
-            {/* ==================================================
+            {/* ============================================
                 PAYMENT OVERLAY
-            ================================================== */}
+            ============================================ */}
 
             {isPaidVideo && !hasFullAccess && previewEnded && (
               <div className="payment-overlay">
@@ -677,12 +922,16 @@ function Watch() {
           </div>
         </div>
 
-        {/* ==================================================
+        {/* =================================================
             INFORMASI VIDEO
-        ================================================== */}
+        ================================================= */}
 
         <div className="watch-info">
           <h1>{video.title}</h1>
+
+          {/* =================================================
+              META
+          ================================================= */}
 
           <div className="watch-meta">
             <span>👤 {video.username || "User"}</span>
@@ -694,9 +943,9 @@ function Watch() {
             </span>
           </div>
 
-          {/* ==================================================
+          {/* =================================================
               STATUS
-          ================================================== */}
+          ================================================= */}
 
           {video.status !== "approved" && isOwner && (
             <div className="purchase-success">
@@ -704,17 +953,17 @@ function Watch() {
             </div>
           )}
 
-          {/* ==================================================
-              PURCHASE
-          ================================================== */}
+          {/* =================================================
+              SUDAH DIBELI
+          ================================================= */}
 
           {isPaidVideo && purchased && (
             <div className="purchase-success">✓ Video sudah dibeli</div>
           )}
 
-          {/* ==================================================
+          {/* =================================================
               OWNER
-          ================================================== */}
+          ================================================= */}
 
           {isOwner && isPaidVideo && (
             <div className="purchase-success">
@@ -722,17 +971,17 @@ function Watch() {
             </div>
           )}
 
-          {/* ==================================================
+          {/* =================================================
               GRATIS
-          ================================================== */}
+          ================================================= */}
 
           {isFreeVideo && (
             <div className="purchase-success">✓ Video gratis</div>
           )}
 
-          {/* ==================================================
-              BELUM BELI
-          ================================================== */}
+          {/* =================================================
+              VIDEO BERBAYAR
+          ================================================= */}
 
           {isPaidVideo && !purchased && !isOwner && (
             <div className="watch-buy-section">
@@ -747,6 +996,13 @@ function Watch() {
                 </p>
               )}
 
+              {previewEnded && (
+                <p className="watch-buy-info">
+                  🔒 Preview sudah selesai. Beli video untuk membuka akses
+                  penuh.
+                </p>
+              )}
+
               <button
                 type="button"
                 className="buy-video-btn"
@@ -758,9 +1014,9 @@ function Watch() {
             </div>
           )}
 
-          {/* ==================================================
+          {/* =================================================
               DESCRIPTION
-          ================================================== */}
+          ================================================= */}
 
           {video.description && (
             <div className="watch-description">
@@ -770,9 +1026,9 @@ function Watch() {
             </div>
           )}
 
-          {/* ==================================================
-              KEMBALI
-          ================================================== */}
+          {/* =================================================
+              BACK
+          ================================================= */}
 
           <div className="watch-back">
             <Link to="/">← Kembali ke video</Link>

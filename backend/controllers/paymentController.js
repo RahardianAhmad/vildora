@@ -9,7 +9,6 @@ const db = require("../config/database");
 const isProduction = process.env.MIDTRANS_IS_PRODUCTION === "true";
 
 const serverKey = process.env.MIDTRANS_SERVER_KEY;
-
 const clientKey = process.env.MIDTRANS_CLIENT_KEY;
 
 // =====================================================
@@ -75,7 +74,7 @@ exports.createPayment = async (req, res) => {
     const { video_id } = req.body;
 
     // -------------------------------------------------
-    // 2. VALIDASI VIDEO
+    // 2. VALIDASI VIDEO ID
     // -------------------------------------------------
 
     if (!video_id) {
@@ -119,7 +118,7 @@ exports.createPayment = async (req, res) => {
         WHERE v.id = ?
           AND v.status = 'approved'
         LIMIT 1
-        `,
+      `,
       [video_id],
     );
 
@@ -162,14 +161,14 @@ exports.createPayment = async (req, res) => {
 
     const [existingPurchase] = await db.promise().query(
       `
-        SELECT
-          id,
-          status,
-          price
-        FROM purchases
-        WHERE user_id = ?
-          AND video_id = ?
-        LIMIT 1
+          SELECT
+            id,
+            status,
+            price
+          FROM purchases
+          WHERE user_id = ?
+            AND video_id = ?
+          LIMIT 1
         `,
       [userId, video_id],
     );
@@ -197,25 +196,25 @@ exports.createPayment = async (req, res) => {
 
       await db.promise().query(
         `
-        UPDATE purchases
-        SET
-          price = ?,
-          status = 'pending'
-        WHERE id = ?
+          UPDATE purchases
+          SET
+            price = ?,
+            status = 'pending'
+          WHERE id = ?
         `,
         [price, purchaseId],
       );
     } else {
       const [purchaseResult] = await db.promise().query(
         `
-          INSERT INTO purchases
-          (
-            user_id,
-            video_id,
-            price,
-            status
-          )
-          VALUES (?, ?, ?, 'pending')
+            INSERT INTO purchases
+            (
+              user_id,
+              video_id,
+              price,
+              status
+            )
+            VALUES (?, ?, ?, 'pending')
           `,
         [userId, video_id, price],
       );
@@ -241,7 +240,7 @@ exports.createPayment = async (req, res) => {
     const customerEmail = video.email || "user@vidora.local";
 
     // -------------------------------------------------
-    // 11. PARAMETER MIDTRANS
+    // 11. PARAMETER MIDTRANS SNAP
     // -------------------------------------------------
 
     const parameter = {
@@ -249,6 +248,24 @@ exports.createPayment = async (req, res) => {
         order_id: orderId,
         gross_amount: price,
       },
+
+      // ------------------------------------------------
+      // JANGAN MENGISI enabled_payments
+      // ------------------------------------------------
+      // Dengan tidak mengisi enabled_payments,
+      // Midtrans akan menggunakan payment method
+      // yang aktif pada Snap Preferences Dashboard.
+      //
+      // Jadi metode aktif seperti:
+      // - GoPay
+      // - Virtual Account
+      // - Card
+      // - ShopeePay
+      // - OVO
+      // - DANA
+      // - QRIS
+      // akan mengikuti konfigurasi Sandbox Midtrans.
+      // ------------------------------------------------
 
       item_details: [
         {
@@ -280,12 +297,11 @@ exports.createPayment = async (req, res) => {
     console.log("================================");
 
     console.log("Order ID :", orderId);
-
     console.log("Video ID :", video.id);
-
     console.log("Price    :", price);
-
     console.log("Mode     :", isProduction ? "PRODUCTION" : "SANDBOX");
+
+    console.log("Payment  :", "Mengikuti Snap Preferences Midtrans");
 
     console.log("================================");
 
@@ -315,15 +331,15 @@ exports.createPayment = async (req, res) => {
 
     await db.promise().query(
       `
-      INSERT INTO payments
-      (
-        purchase_id,
-        transaction_id,
-        payment_method,
-        amount,
-        status
-      )
-      VALUES (?, ?, ?, ?, 'pending')
+        INSERT INTO payments
+        (
+          purchase_id,
+          transaction_id,
+          payment_method,
+          amount,
+          status
+        )
+        VALUES (?, ?, ?, ?, 'pending')
       `,
       [purchaseId, orderId, "midtrans", price],
     );
@@ -346,15 +362,11 @@ exports.createPayment = async (req, res) => {
     });
   } catch (error) {
     console.error("================================");
-
     console.error("CREATE PAYMENT ERROR");
-
     console.error("================================");
 
     console.error("Name:", error.name);
-
     console.error("Message:", error.message);
-
     console.error("Status:", error.httpStatusCode || "-");
 
     if (error.ApiResponse) {
@@ -461,7 +473,7 @@ exports.handleNotification = async (req, res) => {
             ON p.purchase_id = pu.id
           WHERE p.transaction_id = ?
           LIMIT 1
-          `,
+        `,
       [order_id],
     );
 
@@ -490,24 +502,26 @@ exports.handleNotification = async (req, res) => {
     }
 
     // =================================================
-    // 5. SETTLEMENT
+    // 5. SETTLEMENT / SUCCESS
     // =================================================
 
     if (
       transaction_status === "settlement" ||
       (transaction_status === "capture" && fraud_status === "accept")
     ) {
-      // Purchase → PAID
+      // Purchase -> PAID
+
       await db.promise().query(
         `
           UPDATE purchases
           SET status = 'paid'
           WHERE id = ?
-          `,
+        `,
         [payment.purchase_id],
       );
 
-      // Payment → SUCCESS
+      // Payment -> SUCCESS
+
       await db.promise().query(
         `
           UPDATE payments
@@ -517,24 +531,19 @@ exports.handleNotification = async (req, res) => {
             payment_method = ?,
             paid_at = NOW()
           WHERE id = ?
-          `,
+        `,
         [
           transaction_id || order_id,
-
           payment_type || "midtrans",
-
           payment.payment_id,
         ],
       );
 
       console.log("================================");
-
       console.log("PAYMENT SUCCESS");
-
       console.log("Purchase:", payment.purchase_id);
-
       console.log("Video:", payment.video_id);
-
+      console.log("Method:", payment_type || "midtrans");
       console.log("================================");
     }
 
@@ -547,7 +556,7 @@ exports.handleNotification = async (req, res) => {
           UPDATE purchases
           SET status = 'pending'
           WHERE id = ?
-          `,
+        `,
         [payment.purchase_id],
       );
 
@@ -558,11 +567,13 @@ exports.handleNotification = async (req, res) => {
             status = 'pending',
             payment_method = ?
           WHERE id = ?
-          `,
+        `,
         [payment_type || "midtrans", payment.payment_id],
       );
 
       console.log("PAYMENT PENDING:", payment.purchase_id);
+
+      console.log("METHOD:", payment_type || "midtrans");
     }
 
     // =================================================
@@ -574,7 +585,7 @@ exports.handleNotification = async (req, res) => {
           UPDATE purchases
           SET status = 'cancelled'
           WHERE id = ?
-          `,
+        `,
         [payment.purchase_id],
       );
 
@@ -583,7 +594,7 @@ exports.handleNotification = async (req, res) => {
           UPDATE payments
           SET status = 'expired'
           WHERE id = ?
-          `,
+        `,
         [payment.payment_id],
       );
 
@@ -599,7 +610,7 @@ exports.handleNotification = async (req, res) => {
           UPDATE purchases
           SET status = 'cancelled'
           WHERE id = ?
-          `,
+        `,
         [payment.purchase_id],
       );
 
@@ -608,7 +619,7 @@ exports.handleNotification = async (req, res) => {
           UPDATE payments
           SET status = 'failed'
           WHERE id = ?
-          `,
+        `,
         [payment.payment_id],
       );
 
@@ -624,7 +635,7 @@ exports.handleNotification = async (req, res) => {
           UPDATE purchases
           SET status = 'cancelled'
           WHERE id = ?
-          `,
+        `,
         [payment.purchase_id],
       );
 
@@ -633,7 +644,7 @@ exports.handleNotification = async (req, res) => {
           UPDATE payments
           SET status = 'failed'
           WHERE id = ?
-          `,
+        `,
         [payment.payment_id],
       );
 
@@ -650,8 +661,8 @@ exports.handleNotification = async (req, res) => {
     });
   } catch (error) {
     console.error("================================");
-
     console.error("MIDTRANS NOTIFICATION ERROR");
+    console.error("================================");
 
     console.error(error);
 
@@ -679,7 +690,6 @@ exports.checkPurchase = async (req, res) => {
     }
 
     const userId = req.user.id;
-
     const videoId = req.params.videoId;
 
     const [rows] = await db.promise().query(
@@ -696,7 +706,7 @@ exports.checkPurchase = async (req, res) => {
             AND video_id = ?
             AND status = 'paid'
           LIMIT 1
-          `,
+        `,
       [userId, videoId],
     );
 
@@ -762,7 +772,7 @@ exports.getMyPurchases = async (req, res) => {
 
           ORDER BY
             p.purchased_at DESC
-          `,
+        `,
       [userId],
     );
 
