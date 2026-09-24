@@ -16,7 +16,7 @@ function AdminApprove() {
       setLoading(true);
 
       const response = await fetch(
-        "http://localhost:3000/api/videos/admin/pending",
+        "https://epidermal-unloader-viscous.ngrok-free.dev/api/videos/admin/pending",
         {
           headers: {
             Authorization: `Bearer ${token}`,
@@ -53,7 +53,7 @@ function AdminApprove() {
 
     try {
       const response = await fetch(
-        `http://localhost:3000/api/videos/admin/${id}/approve`,
+        `https://epidermal-unloader-viscous.ngrok-free.dev/api/videos/admin/${id}/approve`,
         {
           method: "PUT",
 
@@ -88,7 +88,7 @@ function AdminApprove() {
 
     try {
       const response = await fetch(
-        `http://localhost:3000/api/videos/admin/${id}/reject`,
+        `https://epidermal-unloader-viscous.ngrok-free.dev/api/videos/admin/${id}/reject`,
         {
           method: "PUT",
 
@@ -171,7 +171,7 @@ function AdminApprove() {
               <div className="pending-thumbnail">
                 {video.thumbnail ? (
                   <img
-                    src={`http://localhost:3000/uploads/thumbnails/${video.thumbnail}`}
+                    src={`https://epidermal-unloader-viscous.ngrok-free.dev/uploads/thumbnails/${video.thumbnail}`}
                     alt={video.title}
                   />
                 ) : (

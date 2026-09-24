@@ -18,19 +18,22 @@ function Register() {
     setLoading(true);
 
     try {
-      const response = await fetch("http://localhost:3000/api/auth/register", {
-        method: "POST",
+      const response = await fetch(
+        "https://epidermal-unloader-viscous.ngrok-free.dev/api/auth/register",
+        {
+          method: "POST",
 
-        headers: {
-          "Content-Type": "application/json",
+          headers: {
+            "Content-Type": "application/json",
+          },
+
+          body: JSON.stringify({
+            username,
+            email,
+            password,
+          }),
         },
-
-        body: JSON.stringify({
-          username,
-          email,
-          password,
-        }),
-      });
+      );
 
       const data = await response.json();
 

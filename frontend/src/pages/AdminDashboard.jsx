@@ -18,7 +18,7 @@ function AdminDashboard() {
   const loadStats = async () => {
     try {
       const response = await fetch(
-        "http://localhost:3000/api/videos/admin/stats",
+        "https://epidermal-unloader-viscous.ngrok-free.dev/api/videos/admin/stats",
         {
           headers: {
             Authorization: `Bearer ${token}`,

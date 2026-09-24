@@ -12,7 +12,9 @@ function Home() {
 
   const loadVideos = async () => {
     try {
-      const response = await fetch("http://localhost:3000/api/videos/public");
+      const response = await fetch(
+        "https://epidermal-unloader-viscous.ngrok-free.dev/api/videos/public",
+      );
 
       const data = await response.json();
 
@@ -132,7 +134,7 @@ function Home() {
                 <div className="video-thumbnail">
                   {video.thumbnail ? (
                     <img
-                      src={`http://localhost:3000/uploads/thumbnails/${video.thumbnail}`}
+                      src={`https://epidermal-unloader-viscous.ngrok-free.dev/uploads/thumbnails/${video.thumbnail}`}
                       alt={video.title}
                     />
                   ) : (

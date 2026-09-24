@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
-const API_URL = "http://localhost:3000";
+const API_URL = "https://epidermal-unloader-viscous.ngrok-free.dev";
 
 function Dashboard() {
   const navigate = useNavigate();
@@ -468,7 +468,7 @@ function Dashboard() {
 // ======================================================
 
 function VideoCard({ video }) {
-  const API_URL = "http://localhost:3000";
+  const API_URL = "https://epidermal-unloader-viscous.ngrok-free.dev";
 
   const thumbnail = video.thumbnail
     ? `${API_URL}/uploads/thumbnails/${video.thumbnail}`

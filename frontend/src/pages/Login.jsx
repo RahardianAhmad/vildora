@@ -112,18 +112,21 @@ function Login() {
     try {
       console.log("Mengirim login:", email);
 
-      const response = await fetch("http://localhost:3000/api/auth/login", {
-        method: "POST",
+      const response = await fetch(
+        "https://epidermal-unloader-viscous.ngrok-free.dev/api/auth/login",
+        {
+          method: "POST",
 
-        headers: {
-          "Content-Type": "application/json",
+          headers: {
+            "Content-Type": "application/json",
+          },
+
+          body: JSON.stringify({
+            email: email.trim(),
+            password: password,
+          }),
         },
-
-        body: JSON.stringify({
-          email: email.trim(),
-          password: password,
-        }),
-      });
+      );
 
       console.log("Status:", response.status);
 
