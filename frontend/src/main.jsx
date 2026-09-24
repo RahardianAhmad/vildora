@@ -35,7 +35,7 @@ document.addEventListener("keydown", (e) => {
 
 createRoot(document.getElementById("root")).render(
   <StrictMode>
-    <BrowserRouter>
+    <BrowserRouter basename="/vildora">
       <App />
     </BrowserRouter>
   </StrictMode>,
