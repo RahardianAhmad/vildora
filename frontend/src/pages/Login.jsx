@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import { API_URL } from "../config";
 
 function Login() {
   const navigate = useNavigate();
@@ -112,21 +113,18 @@ function Login() {
     try {
       console.log("Mengirim login:", email);
 
-      const response = await fetch(
-        "https://epidermal-unloader-viscous.ngrok-free.dev/api/auth/login",
-        {
-          method: "POST",
+      const response = await fetch(`${API_URL}/api/auth/login`, {
+        method: "POST",
 
-          headers: {
-            "Content-Type": "application/json",
-          },
-
-          body: JSON.stringify({
-            email: email.trim(),
-            password: password,
-          }),
+        headers: {
+          "Content-Type": "application/json",
         },
-      );
+
+        body: JSON.stringify({
+          email: email.trim(),
+          password: password,
+        }),
+      });
 
       console.log("Status:", response.status);
 
